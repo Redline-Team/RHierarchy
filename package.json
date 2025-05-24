@@ -1,0 +1,18 @@
+{
+  "name": "dev.redline-team.rhierarchy",
+  "version": "1.0.0",
+  "description": "The Unity3D Hierarchy Enhancer for Unity",
+  "displayName": "Redline Hierarchy",
+  "unity": "2022.3",
+  "author": {
+    "name": "The Redline Team",
+    "url": "https://github.com/Redline-Team"
+  },
+  "changelogUrl": "https://github.com/Redline-Team/RHierarchy/releases",
+  "license": "GPL-3.0",
+  "type": "Tool",
+  "vpmDependencies": {},
+  "legacyFolders": {
+    "Assets\\Redline": ""
+  }
+}
