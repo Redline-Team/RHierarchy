@@ -9,7 +9,7 @@ on:
 env:
   packageName: "dev.redline-team.rhierarchy"
   packagePath: "Packages/dev.redline-team.rhierarchy"
-  packageFileName: "Redline Hierarchy"
+  packageFileName: "RedlineHierarchy"
   packageReleaseName: "Bleeding Edge"
 
 permissions:
