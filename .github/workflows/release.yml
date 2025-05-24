@@ -89,7 +89,7 @@ jobs:
         if: ${{ steps.checkReleaseTag.outputs.exists == 'false' }}
         uses: foxscore/add-icon-to-unitypackage@v1
         with:
-          package_path: ${{ env.unityPackage }}
+          package_path: "${{ env.unityPackage }}"
           icon_path: '.github/thumbnail.png'
           package_not_found_behavior: 'warn'
           icon_not_found_behavior: 'warn'
