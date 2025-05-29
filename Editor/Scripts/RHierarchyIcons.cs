@@ -19,6 +19,8 @@ namespace Dev.RedlineTeam.RHierarchy
         private static Texture2D _errorIcon;
         private static Texture2D _infoIcon;
         private static Texture2D _scriptIcon;
+        private static Texture2D _prefabOverrideIcon;
+        private static Texture2D _missingReferenceIcon;
         
         /// <summary>
         /// Static constructor
@@ -38,6 +40,8 @@ namespace Dev.RedlineTeam.RHierarchy
             _errorIcon = EditorGUIUtility.FindTexture("console.erroricon");
             _infoIcon = EditorGUIUtility.FindTexture("console.infoicon");
             _scriptIcon = EditorGUIUtility.FindTexture("cs Script Icon");
+            _prefabOverrideIcon = EditorGUIUtility.FindTexture("PrefabOverlayModified Icon");
+            _missingReferenceIcon = EditorGUIUtility.FindTexture("console.erroricon");
         }
         
         /// <summary>
@@ -127,7 +131,52 @@ namespace Dev.RedlineTeam.RHierarchy
                 }
             }
             
+            // Check for prefab overrides
+            if (PrefabUtility.IsPartOfPrefabInstance(gameObject))
+            {
+                PropertyModification[] modifications = PrefabUtility.GetPropertyModifications(gameObject);
+                if (modifications != null && modifications.Length > 0)
+                {
+                    tooltip = "Has prefab overrides";
+                    return _prefabOverrideIcon;
+                }
+            }
+            
+            // Check for missing references in components
+            if (HasMissingReferences(gameObject))
+            {
+                tooltip = "Has missing references";
+                return _missingReferenceIcon;
+            }
+            
             return null;
+        }
+        
+        /// <summary>
+        /// Check if a GameObject has any missing references in its components
+        /// </summary>
+        private static bool HasMissingReferences(GameObject gameObject)
+        {
+            Component[] components = gameObject.GetComponents<Component>();
+            foreach (Component component in components)
+            {
+                if (component == null) continue;
+                
+                SerializedObject serializedObject = new SerializedObject(component);
+                SerializedProperty property = serializedObject.GetIterator();
+                
+                while (property.NextVisible(true))
+                {
+                    if (property.propertyType == SerializedPropertyType.ObjectReference)
+                    {
+                        if (property.objectReferenceValue == null && property.objectReferenceInstanceIDValue != 0)
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
         }
         
         /// <summary>

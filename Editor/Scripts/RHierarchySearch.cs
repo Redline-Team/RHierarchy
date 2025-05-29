@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 
@@ -21,6 +22,9 @@ namespace Dev.RedlineTeam.RHierarchy
         private static string _lastSearchFilter = string.Empty;
         private static SearchMode _searchMode = SearchMode.Name;
         private static Dictionary<int, bool> _searchMatchCache = new Dictionary<int, bool>();
+        private static bool _useRegex = false;
+        private static List<string> _requiredComponents = new List<string>();
+        private static List<string> _requiredTags = new List<string>();
         
         // Unity's SceneHierarchyWindow reflection info
         private static Type _sceneHierarchyWindowType;
@@ -37,7 +41,8 @@ namespace Dev.RedlineTeam.RHierarchy
             Tag,
             Component,
             Layer,
-            Path
+            Path,
+            Advanced
         }
         
         /// <summary>
@@ -118,10 +123,23 @@ namespace Dev.RedlineTeam.RHierarchy
                 SetSearchMode(SearchMode.Path);
             }
             
-            [MenuItem("Redline/Modules/RHierarchy/Enhanced Search/Disable Enhanced Search", false, 54)]
+            [MenuItem("Redline/Modules/RHierarchy/Enhanced Search/Advanced Search", false, 54)]
+            private static void SearchAdvanced()
+            {
+                SetSearchMode(SearchMode.Advanced);
+            }
+            
+            [MenuItem("Redline/Modules/RHierarchy/Enhanced Search/Disable Enhanced Search", false, 55)]
             private static void DisableSearch()
             {
                 DisableEnhancedSearch();
+            }
+            
+            [MenuItem("Redline/Modules/RHierarchy/Enhanced Search/Toggle Regex", false, 56)]
+            private static void ToggleRegex()
+            {
+                _useRegex = !_useRegex;
+                EditorApplication.RepaintHierarchyWindow();
             }
         }
         
@@ -256,8 +274,9 @@ namespace Dev.RedlineTeam.RHierarchy
                     
                     // Show a notification about the enhanced search mode
                     string modeName = Enum.GetName(typeof(SearchMode), _searchMode);
+                    string regexStatus = _useRegex ? " (Regex Enabled)" : "";
                     EditorWindow.focusedWindow.ShowNotification(
-                        new GUIContent($"Enhanced Search: {modeName}\nEnter a search term in the hierarchy search field"));
+                        new GUIContent($"Enhanced Search: {modeName}{regexStatus}\nEnter a search term in the hierarchy search field"));
                 }
                 else
                 {
@@ -285,14 +304,31 @@ namespace Dev.RedlineTeam.RHierarchy
             if (gameObject == null || string.IsNullOrEmpty(searchText))
                 return false;
                 
+            // Check required components first
+            if (_requiredComponents.Count > 0)
+            {
+                foreach (string componentName in _requiredComponents)
+                {
+                    if (gameObject.GetComponent(componentName) == null)
+                        return false;
+                }
+            }
+            
+            // Check required tags
+            if (_requiredTags.Count > 0)
+            {
+                if (!_requiredTags.Contains(gameObject.tag))
+                    return false;
+            }
+            
             switch (mode)
             {
                 case SearchMode.Name:
-                    return gameObject.name.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0;
+                    return MatchesSearchText(gameObject.name, searchText);
                     
                 case SearchMode.Tag:
                     return !string.IsNullOrEmpty(gameObject.tag) && 
-                           gameObject.tag.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0;
+                           MatchesSearchText(gameObject.tag, searchText);
                     
                 case SearchMode.Component:
                     // Search for components by type name
@@ -300,7 +336,7 @@ namespace Dev.RedlineTeam.RHierarchy
                     foreach (Component component in components)
                     {
                         if (component != null && 
-                            component.GetType().Name.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0)
+                            MatchesSearchText(component.GetType().Name, searchText))
                         {
                             return true;
                         }
@@ -310,12 +346,41 @@ namespace Dev.RedlineTeam.RHierarchy
                 case SearchMode.Layer:
                     // Search by layer name
                     string layerName = LayerMask.LayerToName(gameObject.layer);
-                    return layerName.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0;
+                    return MatchesSearchText(layerName, searchText);
                     
                 case SearchMode.Path:
                     // Search by full path
-                    string path = GetFullPath(gameObject);
-                    return path.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0;
+                    string path = RHierarchyUtility.GetFullPath(gameObject);
+                    return MatchesSearchText(path, searchText);
+                    
+                case SearchMode.Advanced:
+                    // Advanced search checks all properties
+                    bool matches = false;
+                    
+                    // Get components once for reuse
+                    components = gameObject.GetComponents<Component>();
+                    path = RHierarchyUtility.GetFullPath(gameObject);
+                    
+                    // Check name
+                    matches |= MatchesSearchText(gameObject.name, searchText);
+                    
+                    // Check tag
+                    if (!string.IsNullOrEmpty(gameObject.tag))
+                        matches |= MatchesSearchText(gameObject.tag, searchText);
+                    
+                    // Check components
+                    foreach (Component component in components)
+                    {
+                        if (component != null)
+                        {
+                            matches |= MatchesSearchText(component.GetType().Name, searchText);
+                        }
+                    }
+                    
+                    // Check path
+                    matches |= MatchesSearchText(path, searchText);
+                    
+                    return matches;
                     
                 default:
                     return false;
@@ -323,23 +388,78 @@ namespace Dev.RedlineTeam.RHierarchy
         }
         
         /// <summary>
-        /// Get the full hierarchy path of a GameObject
+        /// Check if text matches search criteria
         /// </summary>
-        private static string GetFullPath(GameObject gameObject)
+        private static bool MatchesSearchText(string text, string searchText)
         {
-            if (gameObject == null)
-                return string.Empty;
+            if (string.IsNullOrEmpty(text))
+                return false;
                 
-            string path = gameObject.name;
-            Transform parent = gameObject.transform.parent;
-            
-            while (parent != null)
+            if (_useRegex)
             {
-                path = parent.name + "/" + path;
-                parent = parent.parent;
+                try
+                {
+                    return Regex.IsMatch(text, searchText, RegexOptions.IgnoreCase);
+                }
+                catch
+                {
+                    return false;
+                }
             }
-            
-            return path;
+            else
+            {
+                return text.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0;
+            }
+        }
+        
+        /// <summary>
+        /// Add a required component to the search
+        /// </summary>
+        public static void AddRequiredComponent(string componentName)
+        {
+            if (!_requiredComponents.Contains(componentName))
+            {
+                _requiredComponents.Add(componentName);
+                _searchMatchCache.Clear();
+                EditorApplication.RepaintHierarchyWindow();
+            }
+        }
+        
+        /// <summary>
+        /// Remove a required component from the search
+        /// </summary>
+        public static void RemoveRequiredComponent(string componentName)
+        {
+            if (_requiredComponents.Remove(componentName))
+            {
+                _searchMatchCache.Clear();
+                EditorApplication.RepaintHierarchyWindow();
+            }
+        }
+        
+        /// <summary>
+        /// Add a required tag to the search
+        /// </summary>
+        public static void AddRequiredTag(string tag)
+        {
+            if (!_requiredTags.Contains(tag))
+            {
+                _requiredTags.Add(tag);
+                _searchMatchCache.Clear();
+                EditorApplication.RepaintHierarchyWindow();
+            }
+        }
+        
+        /// <summary>
+        /// Remove a required tag from the search
+        /// </summary>
+        public static void RemoveRequiredTag(string tag)
+        {
+            if (_requiredTags.Remove(tag))
+            {
+                _searchMatchCache.Clear();
+                EditorApplication.RepaintHierarchyWindow();
+            }
         }
     }
 }
