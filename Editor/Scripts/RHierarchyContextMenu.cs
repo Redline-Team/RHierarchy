@@ -47,6 +47,18 @@ namespace Dev.RedlineTeam.RHierarchy
                 menu.AddItem(new GUIContent("Redline Hierarchy/Copy Full Path"), false, CopyFullPath);
                 menu.AddItem(new GUIContent("Redline Hierarchy/Copy GameObject Name"), false, CopyGameObjectName);
                 
+                // Add favorites menu items
+                if (_settings.enableFavorites)
+                {
+                    menu.AddSeparator("Redline Hierarchy/");
+                    foreach (GameObject obj in Selection.gameObjects)
+                    {
+                        int instanceID = obj.GetInstanceID();
+                        bool isFavorite = _settings.IsFavorite(instanceID);
+                        menu.AddItem(new GUIContent($"Redline Hierarchy/Toggle Favorite %#F"), isFavorite, () => ToggleFavorite(obj));
+                    }
+                }
+                
                 // Add separator
                 menu.AddSeparator("");
             }
@@ -131,6 +143,46 @@ namespace Dev.RedlineTeam.RHierarchy
             if (Selection.activeGameObject != null)
             {
                 EditorGUIUtility.systemCopyBuffer = Selection.activeGameObject.name;
+            }
+        }
+        
+        /// <summary>
+        /// Toggle favorite status for a GameObject
+        /// </summary>
+        private static void ToggleFavorite(GameObject gameObject)
+        {
+            if (gameObject == null)
+                return;
+                
+            int instanceID = gameObject.GetInstanceID();
+            
+            if (_settings.IsFavorite(instanceID))
+            {
+                _settings.RemoveFavorite(instanceID);
+            }
+            else
+            {
+                _settings.AddFavorite(instanceID);
+            }
+            
+            EditorApplication.RepaintHierarchyWindow();
+        }
+        
+        /// <summary>
+        /// Toggle favorite status for selected GameObjects
+        /// </summary>
+        [MenuItem("Redline/Modules/RHierarchy/Toggle Favorite %#F", true)]
+        private static bool ValidateToggleFavorite()
+        {
+            return Selection.gameObjects.Length > 0;
+        }
+
+        [MenuItem("Redline/Modules/RHierarchy/Toggle Favorite %#F", false)]
+        private static void ToggleFavorite()
+        {
+            foreach (GameObject obj in Selection.gameObjects)
+            {
+                ToggleFavorite(obj);
             }
         }
         

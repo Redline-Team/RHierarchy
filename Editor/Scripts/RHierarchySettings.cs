@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
+using System.Collections.Generic;
 
 namespace Dev.RedlineTeam.RHierarchy
 {
@@ -51,6 +52,44 @@ namespace Dev.RedlineTeam.RHierarchy
         
         [Tooltip("Enable drag and drop enhancements")]
         public bool enableDragAndDropEnhancements = true;
+
+        [Header("Favorites")]
+        [Tooltip("Enable favorites system")]
+        public bool enableFavorites = true;
+
+        [Tooltip("Color for favorite GameObjects")]
+        public Color favoriteColor = new Color(1f, 0.8f, 0.2f, 0.1f);
+
+        [Tooltip("Show star icon for favorites")]
+        public bool showFavoriteIcon = true;
+
+        // List of favorite GameObject instance IDs
+        [SerializeField]
+        private List<int> _favoriteInstanceIDs = new List<int>();
+
+        public List<int> FavoriteInstanceIDs => _favoriteInstanceIDs;
+
+        public void AddFavorite(int instanceID)
+        {
+            if (!_favoriteInstanceIDs.Contains(instanceID))
+            {
+                _favoriteInstanceIDs.Add(instanceID);
+                EditorUtility.SetDirty(this);
+            }
+        }
+
+        public void RemoveFavorite(int instanceID)
+        {
+            if (_favoriteInstanceIDs.Remove(instanceID))
+            {
+                EditorUtility.SetDirty(this);
+            }
+        }
+
+        public bool IsFavorite(int instanceID)
+        {
+            return _favoriteInstanceIDs.Contains(instanceID);
+        }
         
         #endregion
         

@@ -24,6 +24,11 @@ namespace Dev.RedlineTeam.RHierarchy
         private static Dictionary<int, GameObject> _gameObjectCache = new Dictionary<int, GameObject>();
         private static Dictionary<int, Color> _hierarchyRowColors = new Dictionary<int, Color>();
         
+        // Cache cleanup
+        private static float _lastCacheCleanupTime = 0f;
+        private const float CACHE_CLEANUP_INTERVAL = 300f; // 5 minutes
+        private const int MAX_CACHE_SIZE = 1000;
+        
         // Style cache
         private static GUIStyle _iconStyle;
         private static GUIStyle _labelStyle;
@@ -34,6 +39,7 @@ namespace Dev.RedlineTeam.RHierarchy
         private static Texture2D _lockIcon;
         private static Texture2D _visibilityOnIcon;
         private static Texture2D _visibilityOffIcon;
+        private static Texture2D _starIcon;
         
         #endregion
 
@@ -70,6 +76,7 @@ namespace Dev.RedlineTeam.RHierarchy
                 // Subscribe to hierarchy window events
                 EditorApplication.hierarchyWindowItemOnGUI += OnHierarchyItemGUI;
                 EditorApplication.hierarchyChanged += OnHierarchyChanged;
+                EditorApplication.update += OnEditorUpdate;
                 
                 // Delay style setup until first hierarchy GUI call
                 // This ensures EditorStyles are fully initialized
@@ -92,6 +99,7 @@ namespace Dev.RedlineTeam.RHierarchy
             _lockIcon = EditorGUIUtility.FindTexture("LockIcon");
             _visibilityOnIcon = EditorGUIUtility.FindTexture("d_scenevis_visible_hover");
             _visibilityOffIcon = EditorGUIUtility.FindTexture("d_scenevis_hidden_hover");
+            _starIcon = EditorGUIUtility.FindTexture("Favorite Icon");
         }
 
         /// <summary>
@@ -117,6 +125,54 @@ namespace Dev.RedlineTeam.RHierarchy
                 // Create fallback styles if EditorStyles isn't available yet
                 _labelStyle = new GUIStyle();
                 _boldLabelStyle = new GUIStyle();
+            }
+        }
+
+        /// <summary>
+        /// Called when the editor updates
+        /// </summary>
+        private static void OnEditorUpdate()
+        {
+            // Check if it's time to clean up the cache
+            if (EditorApplication.timeSinceStartup - _lastCacheCleanupTime > CACHE_CLEANUP_INTERVAL)
+            {
+                CleanupCache();
+                _lastCacheCleanupTime = (float)EditorApplication.timeSinceStartup;
+            }
+        }
+
+        /// <summary>
+        /// Clean up the GameObject cache to prevent memory bloat
+        /// </summary>
+        private static void CleanupCache()
+        {
+            // Remove null entries
+            List<int> keysToRemove = new List<int>();
+            foreach (var kvp in _gameObjectCache)
+            {
+                if (kvp.Value == null)
+                {
+                    keysToRemove.Add(kvp.Key);
+                }
+            }
+            
+            foreach (int key in keysToRemove)
+            {
+                _gameObjectCache.Remove(key);
+                _hierarchyRowColors.Remove(key);
+            }
+            
+            // If cache is still too large, remove oldest entries
+            if (_gameObjectCache.Count > MAX_CACHE_SIZE)
+            {
+                int entriesToRemove = _gameObjectCache.Count - MAX_CACHE_SIZE;
+                var oldestKeys = _gameObjectCache.Keys.Take(entriesToRemove).ToList();
+                
+                foreach (int key in oldestKeys)
+                {
+                    _gameObjectCache.Remove(key);
+                    _hierarchyRowColors.Remove(key);
+                }
             }
         }
 
@@ -227,8 +283,13 @@ namespace Dev.RedlineTeam.RHierarchy
         {
             Color backgroundColor = Color.clear;
             
+            // Check for favorites first
+            if (_settings.enableFavorites && _settings.IsFavorite(instanceID))
+            {
+                backgroundColor = _settings.favoriteColor;
+            }
             // Check if we should color this row
-            if (_settings.colorByNestLevel)
+            else if (_settings.colorByNestLevel)
             {
                 // Get the depth level of the GameObject in the hierarchy
                 int depth = 0;
@@ -376,6 +437,25 @@ namespace Dev.RedlineTeam.RHierarchy
             
             // Check if this is acting like a folder (empty with children)
             bool isFolder = isEmpty && gameObject.transform.childCount > 0;
+
+            // Draw favorite icon if enabled
+            if (_settings.enableFavorites && _settings.showFavoriteIcon && _settings.IsFavorite(gameObject.GetInstanceID()))
+            {
+                float iconSize = 16f;
+                float padding = 2f;
+                float visibilityIconWidth = 20f; // Width of visibility icon plus padding
+                
+                // Position star icon to the left of the visibility toggle
+                float scrollbarOffset = 8f; // Offset to account for scrollbar width
+                Rect iconRect = new Rect(
+                    EditorGUIUtility.currentViewWidth - visibilityIconWidth - iconSize - padding - 4f - scrollbarOffset,
+                    selectionRect.y + (selectionRect.height - iconSize) * 0.5f,
+                    iconSize,
+                    iconSize
+                );
+                
+                GUI.Label(iconRect, new GUIContent(_starIcon, "Favorite"), _iconStyle);
+            }
             
             if (isFolder && _settings.showFolderIcons)
             {
