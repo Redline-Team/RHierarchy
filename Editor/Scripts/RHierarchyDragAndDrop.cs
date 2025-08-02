@@ -33,38 +33,43 @@ namespace Dev.RedlineTeam.RHierarchy
         {
             if (!_settings.enableDragAndDropEnhancements)
                 return;
-                
+
             Event current = Event.current;
-            
+
             // Only process drag and drop events
-            if (current.type != EventType.DragUpdated && 
-                current.type != EventType.DragPerform && 
+            if (current.type != EventType.DragUpdated &&
+                current.type != EventType.DragPerform &&
                 current.type != EventType.DragExited)
                 return;
-                
+
             // Check if mouse is over this item
             if (!selectionRect.Contains(current.mousePosition))
                 return;
-                
+
             // Get the GameObject for this hierarchy item
             GameObject targetObject = EditorUtility.InstanceIDToObject(instanceID) as GameObject;
             if (targetObject == null)
                 return;
-                
-            // Handle different drag sources
-            HandlePrefabDrag(targetObject, current);
-            HandleComponentDrag(targetObject, current);
-            HandleMaterialDrag(targetObject, current);
+
+            // Only consume the event if a custom handler actually does something
+            bool handled = false;
+            handled |= HandlePrefabDrag(targetObject, current);
+            handled |= HandleComponentDrag(targetObject, current);
+            handled |= HandleMaterialDrag(targetObject, current);
+
+            // Only use the event if we handled it
+            if (handled)
+                current.Use();
         }
         
         /// <summary>
         /// Handle dragging prefabs onto hierarchy items
         /// </summary>
-        private static void HandlePrefabDrag(GameObject targetObject, Event current)
+        private static bool HandlePrefabDrag(GameObject targetObject, Event current)
         {
             // Check if we're dragging prefabs
             if (DragAndDrop.objectReferences.Length == 0)
-                return;
+                return false;
                 
             bool hasPrefab = false;
             foreach (Object obj in DragAndDrop.objectReferences)
@@ -77,12 +82,10 @@ namespace Dev.RedlineTeam.RHierarchy
             }
             
             if (!hasPrefab)
-                return;
-                
-            // Show visual feedback
+                return false;
+
             DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
-            
-            // Handle drop
+
             if (current.type == EventType.DragPerform)
             {
                 DragAndDrop.AcceptDrag();
@@ -101,13 +104,15 @@ namespace Dev.RedlineTeam.RHierarchy
                         }
                     }
                 }
+                return true;
             }
+            return false;
         }
         
         /// <summary>
         /// Handle dragging components onto hierarchy items
         /// </summary>
-        private static void HandleComponentDrag(GameObject targetObject, Event current)
+        private static bool HandleComponentDrag(GameObject targetObject, Event current)
         {
             // Check if we're dragging MonoScript (component scripts)
             bool hasComponentScript = false;
@@ -121,12 +126,10 @@ namespace Dev.RedlineTeam.RHierarchy
             }
             
             if (!hasComponentScript)
-                return;
-                
-            // Show visual feedback
+                return false;
+
             DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
-            
-            // Handle drop
+
             if (current.type == EventType.DragPerform)
             {
                 DragAndDrop.AcceptDrag();
@@ -147,13 +150,15 @@ namespace Dev.RedlineTeam.RHierarchy
                         }
                     }
                 }
+                return true;
             }
+            return false;
         }
         
         /// <summary>
         /// Handle dragging materials onto hierarchy items
         /// </summary>
-        private static void HandleMaterialDrag(GameObject targetObject, Event current)
+        private static bool HandleMaterialDrag(GameObject targetObject, Event current)
         {
             // Check if we're dragging materials
             bool hasMaterial = false;
@@ -166,18 +171,16 @@ namespace Dev.RedlineTeam.RHierarchy
                 }
             }
             
-            if (!hasMaterial)
-                return;
-                
             // Check if the target has renderers
             Renderer[] renderers = targetObject.GetComponentsInChildren<Renderer>();
             if (renderers.Length == 0)
-                return;
+                return false;
                 
-            // Show visual feedback
+            if (!hasMaterial)
+                return false;
+
             DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
-            
-            // Handle drop
+
             if (current.type == EventType.DragPerform)
             {
                 DragAndDrop.AcceptDrag();
@@ -203,7 +206,9 @@ namespace Dev.RedlineTeam.RHierarchy
                         renderer.sharedMaterial = material;
                     }
                 }
+                return true;
             }
+            return false;
         }
     }
 }
